@@ -11,185 +11,99 @@
 
 </div>
 
-One Dockerfile that builds a server image for **any** modpack on the
-[modpacks.ch](https://modpacks.ch) index — both CurseForge packs (All the Mods,
-Better MC, Prominence…) and FTB's own.
-
-Some of the modpacks I play myself are on
-[Docker Hub](https://hub.docker.com/repositories/dirnei).
+Ready-to-run Docker images for Minecraft modpack servers. The whole modpack is
+baked into the image, so there is nothing to download or install on first start
+— bring a `docker-compose.yml` and a volume and you have a server.
 
 ## Quick start
 
-```powershell
-# Build All the Mods 10
-.\src\build.ps1 -Pack atm10
+Copy this to your server as `docker-compose.yml`:
 
-# Run it
-Copy-Item .env.example .env    # then set RCON_PASSWORD
+```yaml
+services:
+  minecraft:
+    image: ghcr.io/leberkas-org/minecraft_atm_10:latest
+    container_name: minecraft
+    environment:
+      # By setting this you accept the Minecraft EULA: https://aka.ms/MinecraftEULA
+      EULA: "true"
+      MEMORY: 10G
+    ports:
+      - "25565:25565"
+    volumes:
+      - ./data:/data
+    stop_grace_period: 120s
+    restart: unless-stopped
+```
+
+```bash
 docker compose up -d
 docker compose logs -f
 ```
 
-Updating to a newer pack version later:
+Wait for `Done (…)! For help, type "help"` and connect. First start takes a few
+minutes while the world is generated; later starts are quick.
 
-```powershell
-.\src\find-pack.ps1 atm10           # list versions, marking the one you have
-.\src\build.ps1 -Pack atm10 -Latest # build the newest, update the pack file
-docker compose up -d                # world survives the image swap
-```
+Pick the image for the pack you want from [Available images](#available-images),
+and give it enough memory — modded servers are hungry, and the recommended heap
+is listed with each pack.
 
-## Adding a pack
+## Configuration
 
-Add one file to `packs/`. Nothing else changes — both workflows enumerate
-`packs/*.env`, so a new pack is picked up automatically.
-
-Easiest is to generate it from the pack's id:
-
-```powershell
-.\src\propose-pack.ps1 -Id 1298402            # provider auto-detected
-.\src\propose-pack.ps1 -Id 103 -Provider modpack -Name ftb-skies
-```
-
-It resolves the newest release, fills in the version, tag, Minecraft/modloader
-versions and an estimated heap, and writes `packs/<name>.env`. Or write it by
-hand:
-
-```ini
-# packs/atm10.env
-PACK_PROVIDER=curseforge     # curseforge | modpack
-PACK_ID=925200               # CurseForge project id
-PACK_VERSION=8558519         # CurseForge file id
-IMAGE=dirnei/minecraft_atm_10
-TAG=7.3
-MEMORY=10G
-EXCLUDE_MODS=colorwheel*     # optional: glob patterns of mods to drop
-JAVA_VERSION=21              # optional: derived from the pack otherwise
-```
-
-Then `.\src\build.ps1 -Pack atm10`.
-
-`EXCLUDE_MODS` takes space-separated globs, applied to `mods/` after install,
-for mods the manifest wrongly marks as server-side. A pattern matching nothing
-logs a warning rather than failing the build.
-
-### Finding the ids
-
-**`PACK_ID`** is on the pack's own page:
-
-| Provider | Where |
-| --- | --- |
-| CurseForge | **Project ID** in the right-hand sidebar |
-| FTB | the number in the pack URL — `/modpacks/103-ftb-skies` → `103` |
-
-**`PACK_VERSION`** is a *file id*, not a version string. List them with:
-
-```powershell
-.\src\find-pack.ps1 atm10
-```
-
-```
-All the Mods 10 - ATM10   [curseforge/925200]
-newest targets Minecraft 1.21.1  neoforge 21.1.247
-
-   PACK_VERSION version               type    released
--- ------------ -------               ----    --------
- *      8558519 All the Mods 10-7.3   release 2026-08-02
-        8469481 All the Mods 10-7.2   release 2026-07-20
-        8323938 All the Mods 10-7.1   release 2026-06-26
-
- * currently pinned in the pack file
-```
-
-For a pack with no pack file yet, pass the id directly. `-All` includes
-alpha/beta, `-Count N` shows more:
-
-```powershell
-.\src\find-pack.ps1 -Provider curseforge -Id 925200
-.\src\find-pack.ps1 -Provider modpack -Id 103 -All -Count 20
-```
-
-Or skip the lookup — `-Latest` resolves the newest release, builds it, and
-writes `PACK_VERSION` and `TAG` back into the pack file.
-
-There is no search-by-name; read the id off the page.
-
-### build.ps1 options
-
-| Flag | Effect |
-| --- | --- |
-| `-Pack <name>` | Which `packs/<name>.env` to build (required) |
-| `-Latest` | Resolve the newest release from the API first |
-| `-PackVersion <id>` | One-off version override |
-| `-JavaVersion <n>` | Override the derived JDK |
-| `-Image` / `-Tag` | Override the image name from the pack file |
-| `-Push` | Push after a successful build |
-| `-NoCache` | Force a full rebuild |
-
-Every build is tagged three ways — e.g. `:latest`, `:pack-version-8558519`
-(the modpacks.ch version id) and `:7.3` (the `TAG` from the pack file).
-
-## Runtime configuration
+Everything is set through environment variables. Only `EULA` is required.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `EULA` | *(unset)* | Must be `true`. The server refuses to start otherwise. |
-| `MEMORY` | *(pack default)* | Heap size; rewrites `user_jvm_args.txt` at startup. |
-| `EXTRA_JVM_ARGS` | — | Space-separated extra JVM flags. |
-| `MOTD` | — | Server list message. |
+| `MEMORY` | *(pack default)* | Heap size, e.g. `8G`. Change it any time — no rebuild. |
+| `MOTD` | — | Message shown in the server list. |
 | `DIFFICULTY` | — | `peaceful` / `easy` / `normal` / `hard`. |
 | `MAX_PLAYERS` | — | Player cap. |
-| `LEVEL_SEED` | — | World seed (first run only). |
-| `ENABLE_RCON` | `false` | Enables RCON; requires `RCON_PASSWORD`. |
+| `LEVEL_SEED` | — | World seed. First run only. |
+| `ENABLE_RCON` | `false` | Enables remote console; requires `RCON_PASSWORD`. |
 | `RCON_PASSWORD` | — | Required when RCON is on. |
 | `SERVER_PORT` | `25565` | Listen port. |
-| `RCON_PORT` | `25575` | RCON port. |
-| `PUID` / `PGID` | `1000` | Owner of `/data`; match your bind mount. |
+| `RCON_PORT` | `25575` | RCON port. Bind it to `127.0.0.1` if you expose it. |
+| `EXTRA_JVM_ARGS` | — | Extra JVM flags, space separated. |
+| `PUID` / `PGID` | `1000` | Owner of `/data`, to match your host user. |
 
-Memory is a runtime setting — retune the heap without rebuilding.
+Anything not covered here can be set in `data/server.properties` after the first
+start — it is yours to edit and is never overwritten.
 
-## Persistence
+## Your data
 
-Everything mutable lives in one volume at `/data`, symlinked into `/minecraft`:
+Everything worth keeping lives in the single `/data` volume:
 
 ```
-/minecraft/world             -> /data/world
-/minecraft/logs              -> /data/logs
-/minecraft/backups           -> /data/backups
-/minecraft/crash-reports     -> /data/crash-reports
-/minecraft/server.properties -> /data/server.properties
-/minecraft/ops.json          -> /data/ops.json
-/minecraft/whitelist.json    -> /data/whitelist.json
-/minecraft/banned-players.json, banned-ips.json, usercache.json
+data/world              data/server.properties     data/ops.json
+data/logs               data/whitelist.json        data/banned-players.json
+data/backups            data/crash-reports         data/usercache.json
 ```
 
-On first run each path is seeded from the image (or a sane default); afterwards
-the volume wins. Updating the pack is a rebuild, and the world survives it.
+Back up that directory and you have backed up the server. It also means pulling
+a newer image keeps your world — the pack lives in the image, your data does not.
 
-## Notes and limits
+```bash
+docker compose pull && docker compose up -d
+```
 
-- **Built and tested on linux/amd64.** `build.ps1` pins `--platform linux/amd64`.
-  Nothing in the install is architecture-specific, so arm64 should work by
-  changing that pin, but it is untested.
-- **Images are large** — about 4 GB for ATM10, since the whole pack is baked in.
-- `config/`, `kubejs/` and `defaultconfigs/` live in the image, not the volume,
-  so a pack update applies. Hand edits to them are lost on rebuild.
-- Base image is `eclipse-temurin:<JAVA_VERSION>-jdk`.
-- `stop_grace_period` is 120s in the compose file. Don't lower it — a modded
-  server killed mid-chunk-write corrupts region files.
+Stop the server with `docker compose stop`, not by killing it. The image asks
+the server to save and shut down cleanly, which is why `stop_grace_period` is
+set to 120s — a modded server killed mid-save corrupts its region files.
 
-## Ready-to-use images
+## Available images
 
 ### All the Mods 10
 
 <img src="https://media.forgecdn.net/avatars/1182/438/638755918649288941.png" alt="All the Mods 10" width="110" align="right">
 
-![Docker Pulls](https://img.shields.io/docker/pulls/dirnei/minecraft_atm_10?style=flat-square&logo=docker)
-![Docker Image Version](https://img.shields.io/docker/v/dirnei/minecraft_atm_10?sort=date&style=flat-square&labelColor=re)
-
 Minecraft 1.21.1 · NeoForge · 10G recommended
 
+```
+ghcr.io/leberkas-org/minecraft_atm_10:latest
+```
+
 - [Modpack](https://www.curseforge.com/minecraft/modpacks/all-the-mods-10)
-- [Docker](https://hub.docker.com/repository/docker/dirnei/minecraft_atm_10/general)
 
 <br clear="right">
 
@@ -197,12 +111,40 @@ Minecraft 1.21.1 · NeoForge · 10G recommended
 
 <img src="https://apps.modpacks.ch/modpacks/art/99/FTB%20Skies%20512x512.png" alt="FTB Skies" width="110" align="right">
 
-![Docker Pulls](https://img.shields.io/docker/pulls/dirnei/ftb-skies?style=flat-square&logo=docker)
-![Docker Image Version](https://img.shields.io/docker/v/dirnei/ftb-skies?sort=date&style=flat-square&labelColor=re)
-
 Minecraft 1.19.2 · Forge · 8G recommended
 
+```
+ghcr.io/leberkas-org/ftb-skies:latest
+```
+
 - [Modpack](https://feed-the-beast.com/modpacks/103-ftb-skies)
-- [Docker](https://hub.docker.com/repository/docker/dirnei/ftb-skies/general)
 
 <br clear="right">
+
+Each image is also tagged with its pack version (`:7.3`) and the upstream
+version id (`:pack-version-8558519`), if you would rather pin than float.
+
+## Adding a pack
+
+Any modpack on the [modpacks.ch](https://modpacks.ch) index can be built —
+CurseForge packs and FTB's own. Adding one means adding a single file to
+`packs/`, generated from the pack's id:
+
+```powershell
+.\src\propose-pack.ps1 -Id 1298402
+```
+
+That writes `packs/<name>.env` with the newest release, tag, Minecraft and
+modloader versions and an estimated heap. `PACK_ID` is the **Project ID** in the
+CurseForge sidebar, or the number in an FTB pack URL.
+
+Build and try it locally:
+
+```powershell
+.\src\build.ps1 -Pack atm10sky
+```
+
+Then open a pull request. Adding the `build` label runs the checks, which build
+the image and boot the server to prove the pack actually starts; merging
+publishes it. A scheduled job opens a pull request whenever a pack has a newer
+release, so images stay current on their own.

@@ -37,10 +37,11 @@ LABEL org.opencontainers.image.source="https://github.com/Leberkas-org/minecraft
       net.modpacks.pack-id="${PACK_ID}" \
       net.modpacks.version-id="${PACK_VERSION}"
 
+# SERVER_PORT and RCON_PORT are deliberately not set here. The entrypoint writes
+# a server.properties key only when its variable is supplied, so a baked-in
+# default would re-assert itself on every start and silently revert hand edits.
 ENV MC_DIR=/minecraft \
     DATA_DIR=/data \
-    SERVER_PORT=25565 \
-    RCON_PORT=25575 \
     PUID=1000 \
     PGID=1000
 

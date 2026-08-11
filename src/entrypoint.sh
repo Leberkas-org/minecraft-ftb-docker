@@ -14,8 +14,10 @@ set -euo pipefail
 
 MC_DIR="${MC_DIR:-/minecraft}"
 DATA_DIR="${DATA_DIR:-/data}"
-SERVER_PORT="${SERVER_PORT:-25565}"
-RCON_PORT="${RCON_PORT:-25575}"
+# SERVER_PORT and RCON_PORT are intentionally left unset when not supplied.
+# Defaulting them here would make "was it supplied?" unanswerable further down,
+# and server.properties keys are only written when explicitly asked for. Use
+# ${SERVER_PORT:-25565} at the point of use instead.
 PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
 
@@ -68,11 +70,44 @@ if [ "$(id -u)" = "0" ]; then
     log "fixing ownership of ${DATA_DIR} to ${PUID}:${PGID} (may take a moment on a large world)"
     chown -R "${PUID}:${PGID}" "${DATA_DIR}"
   fi
+
+  # Individually mounted directories are separate filesystems, so the check
+  # above says nothing about them - a world bind-mounted from a root-owned host
+  # directory would leave the server unable to save. Read-only mounts are left
+  # alone; chown would fail on them and they are not written anyway.
+  for d in world logs backups crash-reports; do
+    p="${DATA_DIR}/${d}"
+    [ -d "${p}" ] || continue
+    [ "$(stat -c %u "${p}")" = "${PUID}" ] && continue
+    if chown "${PUID}:${PGID}" "${p}" 2>/dev/null; then
+      log "fixing ownership of ${p}"
+      chown -R "${PUID}:${PGID}" "${p}" 2>/dev/null || true
+    else
+      log "warning: ${p} is not owned by ${PUID} and cannot be changed (read-only mount?)"
+    fi
+  done
 fi
+
+# If the operator mounted something at this path themselves, it is theirs: use it
+# where it is and do not manage it. Anything else is destructive - `mv` across
+# filesystems copies then unlinks, so it empties a mounted directory before
+# failing to remove it, and a later `rm -rf` would delete the contents outright.
+#
+# This also means both layouts work: mount ${DATA_DIR} as a whole, mount
+# individual paths under ${DATA_DIR}, or mount them directly at ${MC_DIR} the way
+# older versions of this image did.
+is_self_mounted() {
+  local path="$1" name="$2"
+  mountpoint -q "${path}" 2>/dev/null || return 1
+  log "${name} is mounted directly - using it as-is, not linked into ${DATA_DIR}"
+  return 0
+}
 
 link_dir() {
   local name="$1"
   local src="${MC_DIR}/${name}" dst="${DATA_DIR}/${name}"
+
+  if is_self_mounted "${src}" "${name}"; then return 0; fi
 
   if [ ! -e "${dst}" ]; then
     if [ -d "${src}" ] && [ ! -L "${src}" ]; then
@@ -91,6 +126,8 @@ link_dir() {
 link_file() {
   local name="$1" default="${2-}"
   local src="${MC_DIR}/${name}" dst="${DATA_DIR}/${name}"
+
+  if is_self_mounted "${src}" "${name}"; then return 0; fi
 
   if [ ! -e "${dst}" ]; then
     if [ -f "${src}" ] && [ ! -L "${src}" ]; then
@@ -117,6 +154,44 @@ link_file server.properties ''
 for f in ops.json whitelist.json banned-players.json banned-ips.json usercache.json; do
   link_file "${f}" '[]'
 done
+
+# ---------------------------------------------------------------------------
+# Overlay
+#
+# Any other file placed under ${DATA_DIR} is linked into ${MC_DIR} at the same
+# relative path, so single files can be overridden - server-icon.png, one config
+# out of the pack's hundred - without mounting all of ${MC_DIR} or knowing which
+# directory the server reads them from. The big state directories are pruned so
+# this never walks a multi-GB world.
+# ---------------------------------------------------------------------------
+overlay_extras() {
+  local f rel link
+  while IFS= read -r -d '' f; do
+    rel="${f#"${DATA_DIR}/"}"
+
+    # Managed above; linked the other way round.
+    case "${rel}" in
+      server.properties|ops.json|whitelist.json|banned-players.json|banned-ips.json|usercache.json)
+        continue ;;
+    esac
+
+    link="${MC_DIR}/${rel}"
+    [ -L "${link}" ] && [ "$(readlink "${link}")" = "${f}" ] && continue
+
+    mkdir -p "$(dirname "${link}")"
+    rm -rf "${link}"
+    ln -s "${f}" "${link}"
+    log "overlay ${rel}"
+  done < <(
+    find "${DATA_DIR}" \
+      -path "${DATA_DIR}/world" -prune -o \
+      -path "${DATA_DIR}/logs" -prune -o \
+      -path "${DATA_DIR}/backups" -prune -o \
+      -path "${DATA_DIR}/crash-reports" -prune -o \
+      -type f -print0 2>/dev/null
+  )
+}
+overlay_extras
 
 # ---------------------------------------------------------------------------
 # server.properties
@@ -150,22 +225,30 @@ if [ ! -s "${PROPS}" ]; then
   # already made its own choice.
   grep -qE '^[[:space:]]*allow-flight=' "${PROPS}"  || printf 'allow-flight=true\n'    >> "${PROPS}"
   grep -qE '^[[:space:]]*max-tick-time=' "${PROPS}" || printf 'max-tick-time=180000\n' >> "${PROPS}"
+  grep -qE '^[[:space:]]*server-port=' "${PROPS}"   || printf 'server-port=%s\n' "${SERVER_PORT:-25565}" >> "${PROPS}"
 fi
 
-props_set server-port "${SERVER_PORT}"
+# Only keys whose environment variable was actually supplied are written. After
+# the first run ${PROPS} belongs to the operator: hand edits survive restarts,
+# and nothing is re-asserted behind their back. Re-asserting server-port and
+# enable-rcon on every start used to silently revert exactly the two settings
+# someone is most likely to change by hand.
+[ -n "${SERVER_PORT:-}" ] && props_set server-port "${SERVER_PORT}"
 [ -n "${MOTD:-}" ] && props_set motd "${MOTD}"
 [ -n "${DIFFICULTY:-}" ] && props_set difficulty "${DIFFICULTY}"
 [ -n "${MAX_PLAYERS:-}" ] && props_set max-players "${MAX_PLAYERS}"
 [ -n "${LEVEL_SEED:-}" ] && props_set level-seed "${LEVEL_SEED}"
 
-if [ "${ENABLE_RCON:-false}" = "true" ]; then
-  [ -n "${RCON_PASSWORD:-}" ] || die "ENABLE_RCON=true requires RCON_PASSWORD to be set."
-  props_set enable-rcon true
-  props_set rcon.port "${RCON_PORT}"
-  props_set rcon.password "${RCON_PASSWORD}"
-  log "RCON enabled on port ${RCON_PORT}"
-else
-  props_set enable-rcon false
+if [ -n "${ENABLE_RCON:-}" ]; then
+  if [ "${ENABLE_RCON}" = "true" ]; then
+    [ -n "${RCON_PASSWORD:-}" ] || die "ENABLE_RCON=true requires RCON_PASSWORD to be set."
+    props_set enable-rcon true
+    props_set rcon.port "${RCON_PORT:-25575}"
+    props_set rcon.password "${RCON_PASSWORD}"
+    log "RCON enabled on port ${RCON_PORT:-25575}"
+  else
+    props_set enable-rcon false
+  fi
 fi
 
 # ---------------------------------------------------------------------------
