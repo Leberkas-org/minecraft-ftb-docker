@@ -1,0 +1,44 @@
+# Run a modpack server.
+#
+#   copy .env.example .env      # then set RCON_PASSWORD
+#   docker compose up -d
+#   docker compose logs -f
+#
+# To run a different pack, point `image` at another build (see packs/*.env) or
+# change the three build args below.
+
+services:
+  atm10:
+    image: dirnei/minecraft_atm_10:7.3
+    build:
+      context: ./src
+      args:
+        PACK_PROVIDER: curseforge
+        PACK_ID: "925200"
+        PACK_VERSION: "8558519"
+    container_name: atm10
+
+    environment:
+      # Accepting the Minecraft EULA: https://aka.ms/MinecraftEULA
+      EULA: "true"
+      MEMORY: 10G
+      MOTD: All the Mods 10
+      ENABLE_RCON: "true"
+      RCON_PASSWORD: ${RCON_PASSWORD:?set RCON_PASSWORD in .env}
+      # EXTRA_JVM_ARGS: "-XX:+UseG1GC -XX:MaxGCPauseMillis=100"
+      # PUID / PGID default to 1000; set them to match the bind-mount owner.
+
+    ports:
+      - "25565:25565"
+      # RCON is bound to loopback - do not expose it to the network.
+      - "127.0.0.1:25575:25575"
+
+    volumes:
+      # Everything that survives a pack update: world, logs, backups,
+      # server.properties, ops.json, whitelist.json, bans, usercache.
+      - ./data:/data
+
+    # A modded server needs real time to flush chunks. Too short a grace period
+    # means SIGKILL mid-save and a corrupted region file.
+    stop_grace_period: 120s
+    restart: unless-stopped

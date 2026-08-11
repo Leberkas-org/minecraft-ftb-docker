@@ -1,0 +1,8 @@
+# Scripts that run inside Linux containers must keep LF endings regardless of
+# core.autocrlf on the checkout machine - CRLF makes the shebang fail with an
+# unhelpful "no such file or directory".
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.env text eol=lf
+*.yml text eol=lf
+*.ps1 text eol=crlf
