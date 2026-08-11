@@ -131,6 +131,10 @@ $out = Join-Path $OutputDir 'index.html'
 
 Copy-Item (Join-Path $repoRoot 'logo.png') (Join-Path $OutputDir 'logo.png') -Force
 
+# The custom domain has to travel with the artifact: Pages serves whatever the
+# deployment contains, so without CNAME it falls back to the github.io address.
+Copy-Item (Join-Path $PSScriptRoot 'CNAME') (Join-Path $OutputDir 'CNAME') -Force
+
 # The header mark and the favicon are the same flat logo, recoloured from its
 # source at build time so there is one mark in the repo rather than three
 # hand-maintained colour variants. Green reads on a light and a dark browser tab

@@ -10,7 +10,7 @@ Ready-to-run Docker images for Minecraft modpack servers. The whole modpack is
 baked into the image, so there is nothing to download or install on first start
 — bring a `docker-compose.yml` and a volume and you have a server.
 
-**[Browse the packs →](https://leberkas-org.github.io/minecraft-ftb-docker/)**
+**[Browse the packs →](https://modpack-images.leberkas.org/)**
 
 If these images save you an evening of setup, you can
 [buy me a coffee](https://ko-fi.com/dirnei).
@@ -44,9 +44,9 @@ docker compose logs -f
 Wait for `Done (…)! For help, type "help"` and connect. First start takes a few
 minutes while the world is generated; later starts are quick.
 
-Pick the image for the pack you want from [Available images](#available-images),
-and give it enough memory — modded servers are hungry, and the recommended heap
-is listed with each pack.
+Pick the image for the pack you want from [the pack list](https://modpack-images.leberkas.org/), and give it
+enough memory — modded servers are hungry, and the recommended heap is listed
+with each pack.
 
 ## Configuration
 
@@ -93,36 +93,11 @@ set to 120s — a modded server killed mid-save corrupts its region files.
 
 ## Available images
 
-### All the Mods 10
+The full list, with the image reference, Minecraft version and recommended heap
+for each pack, is on the docs site — it is generated from `packs/` so it cannot
+fall out of step with what is actually published:
 
-<img src="https://media.forgecdn.net/avatars/1182/438/638755918649288941.png" alt="All the Mods 10" width="110" align="right">
-
-Minecraft 1.21.1 · NeoForge · 10G recommended
-
-```
-ghcr.io/leberkas-org/minecraft_atm_10:latest
-```
-
-- [Modpack](https://www.curseforge.com/minecraft/modpacks/all-the-mods-10)
-
-<br clear="right">
-
-### FTB Skies
-
-<img src="https://apps.modpacks.ch/modpacks/art/99/FTB%20Skies%20512x512.png" alt="FTB Skies" width="110" align="right">
-
-Minecraft 1.19.2 · Forge · 8G recommended
-
-```
-ghcr.io/leberkas-org/minecraft_ftb_skies:latest
-```
-
-- [Modpack](https://feed-the-beast.com/modpacks/103-ftb-skies)
-
-<br clear="right">
-
-Each image is also tagged with its pack version (`:7.3`) and the upstream
-version id (`:pack-version-8558519`), if you would rather pin than float.
+**https://modpack-images.leberkas.org/**
 
 ## Adding a pack
 
