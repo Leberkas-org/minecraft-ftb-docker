@@ -24,10 +24,10 @@ param (
 )
 
 $ErrorActionPreference = 'Stop'
-. "$PSScriptRoot\PackFile.ps1"
+. "$PSScriptRoot\..\tools\PackFile.ps1"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-if (-not $OutputDir) { $OutputDir = Join-Path $repoRoot 'site' }
+if (-not $OutputDir) { $OutputDir = Join-Path $repoRoot '_site' }
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
 function Enc([string] $s) {
@@ -117,7 +117,7 @@ $generated = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
 # with the ANSI codepage unless the file carries a BOM, which turns every em
 # dash in the template into mojibake.
 $template = [System.IO.File]::ReadAllText(
-    (Join-Path $PSScriptRoot 'site-template.html'),
+    (Join-Path $PSScriptRoot 'template.html'),
     [System.Text.UTF8Encoding]::new($false))
 $html = $template.
     Replace('{{SLOTS}}', $slots).
@@ -129,9 +129,23 @@ $html = $template.
 $out = Join-Path $OutputDir 'index.html'
 [System.IO.File]::WriteAllText($out, $html, [System.Text.UTF8Encoding]::new($false))
 
-foreach ($asset in 'logo.png', 'logo_flat.png') {
-    Copy-Item (Join-Path $repoRoot $asset) (Join-Path $OutputDir $asset) -Force
-}
+Copy-Item (Join-Path $repoRoot 'logo.png') (Join-Path $OutputDir 'logo.png') -Force
+
+# The header mark and the favicon are the same flat logo, recoloured from its
+# source at build time so there is one mark in the repo rather than three
+# hand-maintained colour variants. Green reads on a light and a dark browser tab
+# alike, which a black or white mark cannot.
+$flat = [System.IO.File]::ReadAllText((Join-Path $repoRoot 'logo_flat.svg'),
+                                      [System.Text.UTF8Encoding]::new($false))
+$pathData = [regex]::Match($flat, '\sd="([^"]+)"').Groups[1].Value
+$viewBox = [regex]::Match($flat, 'viewBox="([^"]+)"').Groups[1].Value
+if (-not $pathData) { throw 'Could not read the mark out of logo_flat.svg' }
+
+$mark = @"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="$viewBox"><path d="$pathData" fill="#7CC24B"/></svg>
+"@
+[System.IO.File]::WriteAllText((Join-Path $OutputDir 'mark.svg'), $mark,
+                               [System.Text.UTF8Encoding]::new($false))
 # Stops Pages running the output through Jekyll, which would drop _-prefixed files.
 [System.IO.File]::WriteAllText((Join-Path $OutputDir '.nojekyll'), '')
 

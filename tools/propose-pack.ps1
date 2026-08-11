@@ -12,15 +12,15 @@
     pack is picked up by the daily update check and by CI on its own.
 
 .EXAMPLE
-    .\src\propose-pack.ps1 -Id 1298402
+    .\tools\propose-pack.ps1 -Id 1298402
     Detects the provider, writes packs/all-the-mods-10-to-the-sky.env.
 
 .EXAMPLE
-    .\src\propose-pack.ps1 -Id 1298402 -Name atm10sky
+    .\tools\propose-pack.ps1 -Id 1298402 -Name atm10sky
     Same, but names the file (and therefore the image) atm10sky.
 
 .EXAMPLE
-    .\src\propose-pack.ps1 -Id 103 -Provider modpack -Memory 8G
+    .\tools\propose-pack.ps1 -Id 103 -Provider modpack -Memory 8G
 #>
 [CmdletBinding()]
 param (
@@ -188,6 +188,6 @@ Write-Host ''
 Write-Host "Wrote packs/$Name.env" -ForegroundColor Green
 Write-Host ''
 Write-Host 'Next:' -ForegroundColor DarkGray
-Write-Host "  .\src\build.ps1 -Pack $Name        # build it locally first" -ForegroundColor DarkGray
+Write-Host "  .\tools\build.ps1 -Pack $Name        # build it locally first" -ForegroundColor DarkGray
 Write-Host "  git checkout -b add-pack/$Name" -ForegroundColor DarkGray
 Write-Host "  # open a PR, add the 'build' label to run the checks" -ForegroundColor DarkGray

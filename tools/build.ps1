@@ -11,21 +11,21 @@
     version name (when the pack file has a TAG).
 
 .EXAMPLE
-    .\src\build.ps1 -Pack atm10
+    .\tools\build.ps1 -Pack atm10
     Builds the pinned version from packs/atm10.env, tagged
     :latest, :pack-version-8558519 and :7.3.
 
 .EXAMPLE
-    .\src\build.ps1 -Pack atm10 -Push
+    .\tools\build.ps1 -Pack atm10 -Push
     Builds and pushes every tag to the registry named by IMAGE in the pack file.
 
 .EXAMPLE
-    .\src\build.ps1 -Pack atm10 -Latest
+    .\tools\build.ps1 -Pack atm10 -Latest
     Resolves the newest release from modpacks.ch, builds it, and writes the
     resolved ids back into packs/atm10.env.
 
 .EXAMPLE
-    .\src\build.ps1 -Pack atm10 -Push
+    .\tools\build.ps1 -Pack atm10 -Push
     Builds and pushes to the registry.
 #>
 [CmdletBinding()]
@@ -155,7 +155,7 @@ if ($cfg.ContainsKey('EXCLUDE_MODS')) {
     $buildArgs += @('--build-arg', "EXCLUDE_MODS=$($cfg['EXCLUDE_MODS'])")
 }
 if ($NoCache) { $buildArgs += '--no-cache' }
-$buildArgs += $PSScriptRoot
+$buildArgs += (Join-Path (Split-Path -Parent $PSScriptRoot) 'src')
 
 # docker writes build progress to stderr. Under Windows PowerShell 5.1 that
 # surfaces as NativeCommandError and, with ErrorActionPreference=Stop, aborts

@@ -13,10 +13,10 @@
     pull request title and body.
 
 .EXAMPLE
-    .\src\update-pack.ps1 -Pack atm10
+    .\tools\update-pack.ps1 -Pack atm10
 
 .EXAMPLE
-    .\src\update-pack.ps1 -Pack atm10 -WhatIf
+    .\tools\update-pack.ps1 -Pack atm10 -WhatIf
     Reports what would change without touching the file.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]

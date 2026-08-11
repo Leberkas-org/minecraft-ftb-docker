@@ -42,7 +42,7 @@ jobs:
       - name: Check for a newer release
         id: check
         shell: pwsh
-        run: ./src/update-pack.ps1 -Pack ${{ matrix.pack }}
+        run: ./tools/update-pack.ps1 -Pack ${{ matrix.pack }}
 
       # Whether the labels API auto-creates an unknown label is undocumented, and
       # this job runs unattended on a schedule, so create it explicitly rather

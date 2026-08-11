@@ -9,11 +9,10 @@ on:
     branches: [ master ]
     paths:
       - 'packs/**'
-      - 'src/site-template.html'
-      - 'src/build-site.ps1'
-      - 'src/PackFile.ps1'
+      - 'site/**'
+      - 'tools/PackFile.ps1'
       - 'logo.png'
-      - 'logo_flat.png'
+      - 'logo_flat.svg'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -35,7 +34,7 @@ jobs:
 
       - name: Generate the site
         shell: pwsh
-        run: ./src/build-site.ps1 -OutputDir site
+        run: ./site/build.ps1 -OutputDir _site
 
       # Cheap guards against publishing something obviously broken: the pack
       # list is fetched from an API at build time, so an empty or mojibake page
@@ -44,22 +43,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s site/index.html
-          grep -q 'ghcr.io/' site/index.html || { echo "::error::no image reference in the page"; exit 1; }
-          grep -q '{{' site/index.html && { echo "::error::unreplaced template token"; exit 1; }
+          test -s _site/index.html
+          grep -q 'ghcr.io/' _site/index.html || { echo "::error::no image reference in the page"; exit 1; }
+          grep -q '{{' _site/index.html && { echo "::error::unreplaced template token"; exit 1; }
 
           # Positive check rather than hunting for mojibake byte patterns: if the
           # template were read with the wrong encoding, the em dash would have
           # become "a€" and this would not match. Asserting the good bytes is
           # both simpler and harder to get subtly wrong.
-          grep -q $'\xe2\x80\x94' site/index.html || {
+          grep -q $'\xe2\x80\x94' _site/index.html || {
             echo "::error::em dash missing - template decoded with the wrong encoding"; exit 1
           }
-          echo "packs on the page: $(grep -c 'class=\"slot\" role=\"tab\"' site/index.html)"
+          echo "packs on the page: $(grep -c 'class=\"slot\" role=\"tab\"' _site/index.html)"
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: _site
 
   deploy:
     needs: build

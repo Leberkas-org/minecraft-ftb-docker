@@ -15,10 +15,15 @@ name: build
 on:
   pull_request:
     types: [ labeled, synchronize, reopened ]
-    paths: [ 'packs/**', 'src/**', '.github/workflows/build.yml' ]
+    paths: &build_paths
+      - 'packs/**'
+      - 'src/**'                    # the image itself
+      - 'tools/build.ps1'           # how the image is built
+      - 'tools/PackFile.ps1'
+      - '.github/workflows/build.yml'
   push:
     branches: [ master ]
-    paths: [ 'packs/**', 'src/**', '.github/workflows/build.yml' ]
+    paths: *build_paths
   workflow_dispatch:
     inputs:
       pack:
@@ -49,7 +54,9 @@ jobs:
           fetch-depth: 0
 
       # A changed packs/x.env builds only x. A change under src/ touches the
-      # Dockerfile, entrypoint or installer, so every image has to be rebuilt.
+      # Dockerfile, entrypoint or installer, and build.ps1/PackFile.ps1 change how
+      # every image is built, so those rebuild all of them. The other tools and
+      # the site cannot affect an image and never appear here.
       - id: pick
         shell: bash
         run: |
@@ -72,8 +79,8 @@ jobs:
             fi
             echo "changed files:"; echo "$changed" | awk '{ print "  " $0 }'
 
-            if echo "$changed" | grep -q '^src/'; then
-              echo "src/ changed -> rebuilding every pack"
+            if echo "$changed" | grep -qE '^src/|^tools/(build|PackFile)\.ps1$'; then
+              echo "image inputs changed -> rebuilding every pack"
               selected="$all"
             else
               selected=$(printf '%s\n' "$changed" | sed -n 's|^packs/\(.*\)\.env$|\1|p')
@@ -114,7 +121,7 @@ jobs:
       - name: Build
         id: build
         shell: pwsh
-        run: ./src/build.ps1 -Pack ${{ matrix.pack }}
+        run: ./tools/build.ps1 -Pack ${{ matrix.pack }}
 
       # The real gate. ATM10 7.3 built cleanly but would not start until
       # colorwheel was excluded, and only booting the server catches that.

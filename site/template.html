@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Minecraft modpack server images</title>
 <meta name="description" content="Ready-to-run Docker images for Minecraft modpack servers. The whole modpack is baked in — pick a pack, copy the compose file, done.">
-<link rel="icon" href="logo.png">
+<link rel="icon" type="image/svg+xml" href="mark.svg">
+<link rel="icon" href="logo.png" sizes="any">
 <meta property="og:title" content="Minecraft modpack server images">
 <meta property="og:description" content="Pick a pack, copy the compose file, done.">
 <meta property="og:image" content="logo.png">
@@ -89,7 +90,9 @@ header{
   border-bottom:1px solid var(--line);
 }
 .bar{display:flex;align-items:center;gap:.85rem;padding-block:.7rem}
-.bar img{width:30px;height:30px;border-radius:var(--radius);display:block}
+.bar__mark{width:30px;height:30px;flex:none;display:block;transition:opacity .12s ease}
+.bar a.brand{display:flex;align-items:center;gap:.7rem;text-decoration:none;color:inherit}
+.bar a.brand:hover .bar__mark{opacity:.75}
 .bar b{font-family:var(--display);font-weight:700;font-size:1rem;letter-spacing:-.01em}
 .bar nav{margin-left:auto;display:flex;gap:1.25rem}
 .bar nav a{
@@ -101,6 +104,15 @@ header{
 
 /* --- hero --------------------------------------------------------------- */
 .hero{padding-block:clamp(3rem,9vw,6.5rem) clamp(2.5rem,6vw,4rem)}
+.hero .wrap{display:grid;gap:clamp(1.75rem,4vw,3.5rem);align-items:center}
+@media (min-width:900px){
+  .hero .wrap{grid-template-columns:minmax(0,1fr) auto}
+}
+/* No frame: logo.png carries an alpha channel, so it sits on the page ground
+   directly. */
+.hero__logo{justify-self:center;width:min(320px,62vw);aspect-ratio:1}
+@media (min-width:900px){.hero__logo{justify-self:end;width:clamp(200px,24vw,300px)}}
+.hero__logo img{width:100%;height:100%;display:block}
 .hero h1{
   font-family:var(--display);font-weight:800;
   font-size:clamp(2.4rem,6.4vw,4.6rem);line-height:.98;
@@ -257,8 +269,10 @@ footer .built{margin-left:auto;font-family:var(--mono);font-size:.72rem}
 
 <header>
   <div class="wrap bar">
-    <img src="logo.png" alt="">
-    <b>modpack server images</b>
+    <a class="brand" href="#">
+      <img class="bar__mark" src="mark.svg" alt="" width="30" height="30">
+      <b>modpack server images</b>
+    </a>
     <nav>
       <a href="#packs">Packs</a>
       <a href="#configure">Configure</a>
@@ -272,6 +286,7 @@ footer .built{margin-left:auto;font-family:var(--mono);font-size:.72rem}
 
 <section class="hero">
   <div class="wrap">
+    <div>
     <h1>Your modpack server, <em>one compose file.</em></h1>
     <p>The whole modpack is baked into the image. Nothing downloads mods on first boot, nothing needs a CurseForge key — pick a pack below, copy the compose file, and you have a server.</p>
     <div class="stats">
@@ -279,6 +294,11 @@ footer .built{margin-left:auto;font-family:var(--mono);font-size:.72rem}
       <span>NeoForge &middot; Forge</span>
       <span>world survives updates</span>
       <span>clean shutdown &amp; save</span>
+    </div>
+    </div>
+
+    <div class="hero__logo">
+      <img src="logo.png" alt="" width="1254" height="1254">
     </div>
   </div>
 </section>
@@ -384,7 +404,7 @@ docker compose up -d</pre>
     <p class="lede">Any pack on the <a href="https://modpacks.ch">modpacks.ch</a> index can be built — CurseForge packs and FTB's own. Adding one means adding a single file to <code>packs/</code>.</p>
     <div class="flow">
       <div><h3>Find the id</h3><p><b>Project ID</b> in the CurseForge sidebar, or the number in an FTB pack URL.</p></div>
-      <div><h3>Generate</h3><p><code>.\src\propose-pack.ps1 -Id 1298402</code> writes the pack file: newest release, tag, versions, heap.</p></div>
+      <div><h3>Generate</h3><p><code>.\tools\propose-pack.ps1 -Id 1298402</code> writes the pack file: newest release, tag, versions, heap.</p></div>
       <div><h3>Open a PR</h3><p>Add the <code>build</code> label and CI builds the image and boots the server to prove the pack starts.</p></div>
       <div><h3>Merge</h3><p>Publishes the image. A daily job then opens a PR whenever the pack has a newer release.</p></div>
     </div>

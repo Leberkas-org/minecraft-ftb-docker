@@ -1,11 +1,6 @@
 <div align="center">
 
-<!-- Neither logo has an alpha channel: logo.png is on black, logo_flat.png on
-     white, so each is served to the theme whose background it already matches. -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="logo.png">
-  <img src="logo_flat.png" alt="Minecraft modpack server images" width="180">
-</picture>
+<img src="logo.png" alt="Minecraft modpack server images" width="180">
 
 # Minecraft modpack server images
 
@@ -136,7 +131,7 @@ CurseForge packs and FTB's own. Adding one means adding a single file to
 `packs/`, generated from the pack's id:
 
 ```powershell
-.\src\propose-pack.ps1 -Id 1298402
+.\tools\propose-pack.ps1 -Id 1298402
 ```
 
 That writes `packs/<name>.env` with the newest release, tag, Minecraft and
@@ -146,7 +141,7 @@ CurseForge sidebar, or the number in an FTB pack URL.
 Build and try it locally:
 
 ```powershell
-.\src\build.ps1 -Pack atm10sky
+.\tools\build.ps1 -Pack atm10sky
 ```
 
 Then open a pull request. Adding the `build` label runs the checks, which build

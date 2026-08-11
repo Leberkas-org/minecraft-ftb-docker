@@ -14,15 +14,15 @@
     does not reliably return even well-known packs, so it would only mislead.
 
 .EXAMPLE
-    .\src\find-pack.ps1 atm10
+    .\tools\find-pack.ps1 atm10
     Lists recent versions of a configured pack, marking the pinned one.
 
 .EXAMPLE
-    .\src\find-pack.ps1 -Provider curseforge -Id 925200
+    .\tools\find-pack.ps1 -Provider curseforge -Id 925200
     Lists versions for a pack that has no pack file yet.
 
 .EXAMPLE
-    .\src\find-pack.ps1 -Provider curseforge -Id 925200 -All -Count 20
+    .\tools\find-pack.ps1 -Provider curseforge -Id 925200 -All -Count 20
     Includes alpha/beta versions.
 #>
 [CmdletBinding(DefaultParameterSetName = 'Pack')]
@@ -99,8 +99,8 @@ if (-not $Pack) {
     Write-Host 'Configured packs:'
     Get-PackNames -PacksDir $packsDir | ForEach-Object { "  $_" }
     Write-Host ''
-    Write-Host 'Usage: .\src\find-pack.ps1 <pack>' -ForegroundColor DarkGray
-    Write-Host '       .\src\find-pack.ps1 -Provider curseforge -Id <project id>' -ForegroundColor DarkGray
+    Write-Host 'Usage: .\tools\find-pack.ps1 <pack>' -ForegroundColor DarkGray
+    Write-Host '       .\tools\find-pack.ps1 -Provider curseforge -Id <project id>' -ForegroundColor DarkGray
     return
 }
 
@@ -109,4 +109,4 @@ $cfg = Get-PackConfig -PackFile $packFile -Require @('PACK_PROVIDER', 'PACK_ID')
 
 Show-Versions $cfg['PACK_PROVIDER'] $cfg['PACK_ID'] $cfg['PACK_VERSION']
 Write-Host ''
-Write-Host "Build the newest with: .\src\build.ps1 -Pack $Pack -Latest" -ForegroundColor DarkGray
+Write-Host "Build the newest with: .\tools\build.ps1 -Pack $Pack -Latest" -ForegroundColor DarkGray
