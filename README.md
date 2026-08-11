@@ -114,7 +114,7 @@ ghcr.io/leberkas-org/minecraft_atm_10:latest
 Minecraft 1.19.2 · Forge · 8G recommended
 
 ```
-ghcr.io/leberkas-org/ftb-skies:latest
+ghcr.io/leberkas-org/minecraft_ftb_skies:latest
 ```
 
 - [Modpack](https://feed-the-beast.com/modpacks/103-ftb-skies)
