@@ -230,6 +230,17 @@ code.ref{color:var(--docker);background:rgba(42,140,224,.09);white-space:nowrap}
 footer{border-top:1px solid var(--line);padding-block:2.5rem;color:var(--muted);font-size:.82rem}
 footer .wrap{display:flex;flex-wrap:wrap;gap:.75rem 1.5rem;align-items:center}
 footer .built{margin-left:auto;font-family:var(--mono);font-size:.72rem}
+.kofi{
+  display:inline-flex;align-items:center;gap:.45rem;text-decoration:none;
+  color:var(--dirt);border:1px solid color-mix(in srgb,var(--dirt) 45%,transparent);
+  border-radius:2px;padding:.28rem .6rem;font-size:.8rem;
+  transition:color .12s ease,border-color .12s ease,background .12s ease;
+}
+.kofi:hover{
+  color:#C08457;border-color:var(--dirt);
+  background:color-mix(in srgb,var(--dirt) 12%,transparent);
+}
+.kofi svg{width:14px;height:14px;flex:none}
 </style>
 </head>
 <body>
@@ -369,6 +380,14 @@ data/<b>backups</b>            data/<b>crash-reports</b>       data/<b>usercache
   <div class="wrap">
     <a href="https://github.com/Leberkas-org/minecraft-ftb-docker">Source on GitHub</a>
     <a href="https://github.com/Leberkas-org/minecraft-ftb-docker/issues">Issues</a>
+    <a class="kofi" href="https://ko-fi.com/dirnei" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <path d="M4 8h11v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8Z"/>
+        <path d="M15 9h2.5a2.5 2.5 0 0 1 0 5H15"/>
+        <path d="M6 3.5v1.8M9.5 3.5v1.8M13 3.5v1.8"/>
+      </svg>
+      Buy me a coffee
+    </a>
     <span class="built">generated {{GENERATED}}</span>
   </div>
 </footer>

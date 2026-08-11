@@ -17,6 +17,9 @@ baked into the image, so there is nothing to download or install on first start
 
 **[Browse the packs →](https://leberkas-org.github.io/minecraft-ftb-docker/)**
 
+If these images save you an evening of setup, you can
+[buy me a coffee](https://ko-fi.com/dirnei).
+
 ## Quick start
 
 Copy this to your server as `docker-compose.yml`:
