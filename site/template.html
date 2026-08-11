@@ -197,6 +197,51 @@ header{
 .copy:hover{color:var(--grass);border-color:var(--grass-dim)}
 .copy[data-done="1"]{color:var(--grass);border-color:var(--grass)}
 
+/* Configurator. Kept behind a button rather than on the page: the compose file
+   is already correct for a default install, and most people should copy it and
+   leave. */
+dialog{
+  padding:0;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--surface);color:var(--text);
+  width:min(760px,calc(100% - 2rem));max-height:calc(100dvh - 4rem);
+}
+dialog::backdrop{background:rgba(0,0,0,.62)}
+.cfg__head{
+  display:flex;align-items:baseline;gap:1rem;padding:1rem 1.25rem;
+  border-bottom:1px solid var(--line);
+}
+.cfg__head h3{font-family:var(--display);font-weight:700;font-size:1.05rem;margin:0}
+.cfg__head p{margin:0;color:var(--muted);font-size:.82rem}
+.cfg__close{
+  margin-left:auto;appearance:none;background:transparent;border:1px solid var(--line);
+  border-radius:2px;color:var(--muted);cursor:pointer;font-family:var(--mono);
+  font-size:.72rem;padding:.25rem .5rem;
+}
+.cfg__close:hover{color:var(--text);border-color:var(--muted)}
+.cfg__body{padding:1.25rem;display:grid;gap:1.25rem;overflow:auto}
+.fields{display:grid;gap:.85rem}
+@media (min-width:620px){.fields{grid-template-columns:1fr 1fr}}
+.field{display:grid;gap:.3rem;min-width:0}
+.field label{
+  font-family:var(--mono);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);
+}
+.field input,.field select{
+  font-family:var(--mono);font-size:.85rem;color:var(--text);
+  background:#0E1213;border:1px solid var(--line);border-radius:2px;
+  padding:.45rem .55rem;width:100%;
+}
+.field input:focus,.field select:focus{outline:2px solid var(--grass);outline-offset:1px}
+.field small{color:var(--muted);font-size:.72rem}
+.field--wide{grid-column:1/-1}
+/* .field sets display:grid, which beats the UA rule for [hidden] - without this
+   the RCON password box shows even with RCON switched off. */
+.field[hidden]{display:none}
+.check{display:flex;align-items:flex-start;gap:.55rem;flex-wrap:wrap}
+.check input{width:auto;margin-top:.25rem}
+.check label{flex:1;min-width:0}
+.check label{text-transform:none;letter-spacing:0;font-size:.85rem;color:var(--text);font-family:var(--body)}
+
 .steps{display:grid;gap:1rem;margin-top:1.25rem}
 @media (min-width:860px){.steps{grid-template-columns:1fr 1fr}}
 
@@ -322,6 +367,7 @@ footer .built{margin-left:auto;font-family:var(--mono);font-size:.72rem}
       <div class="lore__lines" id="lore-lines"></div>
       <div class="code">
         <div class="code__bar"><span>docker-compose.yml</span>
+          <button class="copy" id="cfg-open" type="button">Configure</button>
           <button class="copy" data-copy="compose">Copy</button>
         </div>
         <pre id="compose"></pre>
@@ -333,6 +379,67 @@ footer .built{margin-left:auto;font-family:var(--mono);font-size:.72rem}
         <pre id="pull"></pre>
       </div>
     </div>
+
+    <dialog id="cfg" aria-labelledby="cfg-title">
+      <form method="dialog" class="cfg__head">
+        <h3 id="cfg-title">Configure</h3>
+        <p>Only what you change is written into the file.</p>
+        <button class="cfg__close" value="close">Close</button>
+      </form>
+      <div class="cfg__body">
+        <div class="fields">
+          <div class="field">
+            <label for="f-port">Host port</label>
+            <input id="f-port" type="number" min="1" max="65535" value="25565" inputmode="numeric">
+            <small>What players connect to. The server still listens on 25565.</small>
+          </div>
+          <div class="field">
+            <label for="f-mem">Memory</label>
+            <input id="f-mem" type="text" placeholder="10G">
+            <small>Defaults to the pack's recommendation.</small>
+          </div>
+          <div class="field">
+            <label for="f-data">Data directory</label>
+            <input id="f-data" type="text" value="./data">
+            <small>World, logs and settings live here.</small>
+          </div>
+          <div class="field">
+            <label for="f-name">Container name</label>
+            <input id="f-name" type="text" value="minecraft">
+          </div>
+          <div class="field">
+            <label for="f-motd">MOTD</label>
+            <input id="f-motd" type="text" placeholder="leave empty for the default">
+          </div>
+          <div class="field">
+            <label for="f-diff">Difficulty</label>
+            <select id="f-diff">
+              <option value="">pack default</option>
+              <option>peaceful</option><option>easy</option>
+              <option>normal</option><option>hard</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="f-max">Max players</label>
+            <input id="f-max" type="number" min="1" placeholder="default">
+          </div>
+          <div class="field field--wide check">
+            <input id="f-rcon" type="checkbox">
+            <label for="f-rcon">Enable RCON &mdash; adds the password and binds the port to localhost</label>
+          </div>
+          <div class="field field--wide" id="f-rconpass-wrap" hidden>
+            <label for="f-rconpass">RCON password</label>
+            <input id="f-rconpass" type="text" placeholder="change-me">
+          </div>
+        </div>
+        <div class="code">
+          <div class="code__bar"><span>docker-compose.yml</span>
+            <button class="copy" data-copy="cfg-preview" type="button">Copy</button>
+          </div>
+          <pre id="cfg-preview"></pre>
+        </div>
+      </div>
+    </dialog>
 
     <div class="steps">
       <div class="code">
@@ -434,20 +541,44 @@ docker compose up -d</pre>
 const PACKS = {{PACKS_JSON}};
 
 const $ = (id) => document.getElementById(id);
-const composeFor = (p) => `services:
-  minecraft:
-    image: ${p.image}:${p.tag || 'latest'}
-    container_name: minecraft
-    environment:
-      # By setting this you accept the Minecraft EULA
-      EULA: "true"
-      MEMORY: ${p.memory}
-    ports:
-      - "25565:25565"
-    volumes:
-      - ./data:/data
-    stop_grace_period: 120s
-    restart: unless-stopped`;
+
+// Only values the operator actually changed are written out. A compose file
+// listing every option, most of them at their default, is harder to read than
+// one that says only what matters here.
+const CFG = { port:'25565', memory:'', data:'./data', name:'minecraft',
+              motd:'', difficulty:'', maxPlayers:'', rcon:false, rconPass:'' };
+
+function composeFor(p){
+  const env = ['      # By setting this you accept the Minecraft EULA',
+               '      EULA: "true"',
+               `      MEMORY: ${CFG.memory || p.memory}`];
+  if (CFG.motd)        env.push(`      MOTD: ${CFG.motd}`);
+  if (CFG.difficulty)  env.push(`      DIFFICULTY: ${CFG.difficulty}`);
+  if (CFG.maxPlayers)  env.push(`      MAX_PLAYERS: ${CFG.maxPlayers}`);
+  if (CFG.rcon){
+    env.push('      ENABLE_RCON: "true"');
+    env.push(`      RCON_PASSWORD: ${CFG.rconPass || 'change-me'}`);
+  }
+
+  const ports = [`      - "${CFG.port}:25565"`];
+  // RCON is unauthenticated beyond its password, so it is never published wide.
+  if (CFG.rcon) ports.push('      - "127.0.0.1:25575:25575"');
+
+  return [
+    'services:',
+    '  minecraft:',
+    `    image: ${p.image}:${p.tag || 'latest'}`,
+    `    container_name: ${CFG.name}`,
+    '    environment:',
+    ...env,
+    '    ports:',
+    ...ports,
+    '    volumes:',
+    `      - ${CFG.data}:/data`,
+    '    stop_grace_period: 120s',
+    '    restart: unless-stopped',
+  ].join(String.fromCharCode(10));
+}
 
 function select(key){
   const p = PACKS.find(x => x.key === key) || PACKS[0];
@@ -468,6 +599,7 @@ function select(key){
     .join('');
 
   $('compose').textContent = composeFor(p);
+  $('cfg-preview').textContent = composeFor(p);
   $('pull').textContent = `docker pull ${p.image}:${p.tag || 'latest'}`;
   try { history.replaceState(null, '', '#pack=' + p.key); } catch (e) {}
 }
@@ -476,7 +608,7 @@ document.querySelectorAll('.slot[data-key]').forEach(el => {
   el.addEventListener('click', () => select(el.dataset.key));
 });
 
-document.querySelectorAll('.copy').forEach(btn => {
+document.querySelectorAll('.copy[data-copy]').forEach(btn => {
   btn.addEventListener('click', async () => {
     const text = $(btn.dataset.copy).textContent;
     try {
@@ -489,6 +621,27 @@ document.querySelectorAll('.copy').forEach(btn => {
       setTimeout(() => { btn.textContent = 'Copy'; }, 1600);
     }
   });
+});
+
+// --- configurator ---------------------------------------------------------
+const dlg = $('cfg');
+const bind = (id, key, prop) => {
+  const el = $(id);
+  el.addEventListener('input', () => {
+    CFG[key] = prop === 'checked' ? el.checked : el.value;
+    if (key === 'rcon') $('f-rconpass-wrap').hidden = !el.checked;
+    select(document.querySelector('.slot[aria-selected="true"]').dataset.key);
+  });
+};
+bind('f-port','port'); bind('f-mem','memory'); bind('f-data','data');
+bind('f-name','name'); bind('f-motd','motd'); bind('f-diff','difficulty');
+bind('f-max','maxPlayers'); bind('f-rcon','rcon','checked'); bind('f-rconpass','rconPass');
+
+$('cfg-open').addEventListener('click', () => {
+  // Show the pack's own heap as the starting point rather than an empty box.
+  const p = PACKS.find(x => x.key === document.querySelector('.slot[aria-selected="true"]').dataset.key);
+  $('f-mem').placeholder = p.memory;
+  dlg.showModal();
 });
 
 const fromHash = (location.hash.match(/pack=([\w.-]+)/) || [])[1];
