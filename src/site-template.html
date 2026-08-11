@@ -203,12 +203,22 @@ code.ref{color:var(--docker);background:rgba(42,140,224,.09);white-space:nowrap}
 .req{color:var(--dirt);font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em}
 
 /* --- data map ----------------------------------------------------------- */
-.tree{
-  font-family:var(--mono);font-size:.82rem;line-height:1.85;color:var(--muted);
+/* One path per row with what it holds. The previous three-column monospace
+   block was compact but unreadable - you had to scan across columns to find a
+   single filename. */
+.paths{
+  list-style:none;margin:0;padding:0;
   border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);
-  padding:1rem 1.25rem;overflow-x:auto;
 }
-.tree b{color:var(--text);font-weight:500}
+.paths li{
+  display:grid;grid-template-columns:minmax(0,16rem) 1fr;gap:.15rem 1.5rem;
+  padding:.55rem 1rem;border-bottom:1px solid var(--line);align-items:baseline;
+}
+.paths li:last-child{border-bottom:0}
+.paths code{font-family:var(--mono);font-size:.82rem;color:var(--text);word-break:break-all}
+.paths code b{color:var(--grass);font-weight:500}
+.paths span{color:var(--muted);font-size:.88rem}
+@media (max-width:640px){.paths li{grid-template-columns:1fr;padding-block:.6rem}}
 
 .note{
   border-left:2px solid var(--grass-dim);padding:.15rem 0 .15rem 1rem;
@@ -351,9 +361,17 @@ docker compose up -d</pre>
     <p class="eyebrow" data-step="03">Keep your world</p>
     <h2>Everything lives in one volume</h2>
     <p class="lede">Back up <code>./data</code> and you have backed up the server. The modpack lives in the image and your data does not, so pulling a newer image keeps your world.</p>
-    <div class="tree">data/<b>world</b>              data/<b>server.properties</b>   data/<b>ops.json</b>
-data/<b>logs</b>               data/<b>whitelist.json</b>      data/<b>banned-players.json</b>
-data/<b>backups</b>            data/<b>crash-reports</b>       data/<b>usercache.json</b></div>
+    <ul class="paths">
+      <li><code>data/<b>world</b></code><span>The world itself — chunks, player inventories, mod data.</span></li>
+      <li><code>data/<b>server.properties</b></code><span>Server settings. Yours to edit; nothing overwrites it.</span></li>
+      <li><code>data/<b>ops.json</b></code><span>Operators.</span></li>
+      <li><code>data/<b>whitelist.json</b></code><span>Whitelisted players.</span></li>
+      <li><code>data/<b>banned-players.json</b></code><span>Bans, alongside <code>banned-ips.json</code>.</span></li>
+      <li><code>data/<b>usercache.json</b></code><span>Name to UUID cache.</span></li>
+      <li><code>data/<b>logs</b></code><span>Server logs, rotated per start.</span></li>
+      <li><code>data/<b>crash-reports</b></code><span>Kept here on purpose, so a crash report outlives the container it killed.</span></li>
+      <li><code>data/<b>backups</b></code><span>Whatever your backup mod writes.</span></li>
+    </ul>
     <p class="note">Drop any other file in <code>data/</code> and it is copied into the server at the same path on start — <code>data/server-icon.png</code>, or a single config out of the pack's hundreds at <code>data/config/&lt;mod&gt;.toml</code>. Your copy is re-applied every start, so it stays the source of truth.</p>
     <p class="note">Stop with <code>docker compose stop</code>, never by killing the container. The server is asked to save and shut down cleanly, which is why <b>stop_grace_period is 120s</b> — a modded server killed mid-save corrupts its region files.</p>
   </div>
