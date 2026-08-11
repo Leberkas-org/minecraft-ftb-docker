@@ -44,6 +44,7 @@ param (
 )
 
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot\PackFile.ps1"
 $api = 'https://api.modpacks.ch/public'
 
 function Show-Versions($provider, $id, $pinned) {
@@ -96,25 +97,15 @@ $packsDir = Join-Path $repoRoot 'packs'
 
 if (-not $Pack) {
     Write-Host 'Configured packs:'
-    Get-ChildItem $packsDir -Filter '*.env' | ForEach-Object { "  $($_.BaseName)" }
+    Get-PackNames -PacksDir $packsDir | ForEach-Object { "  $_" }
     Write-Host ''
     Write-Host 'Usage: .\src\find-pack.ps1 <pack>' -ForegroundColor DarkGray
     Write-Host '       .\src\find-pack.ps1 -Provider curseforge -Id <project id>' -ForegroundColor DarkGray
     return
 }
 
-$packFile = Join-Path $packsDir "$Pack.env"
-if (-not (Test-Path $packFile)) {
-    $available = (Get-ChildItem $packsDir -Filter '*.env' | ForEach-Object { $_.BaseName }) -join ', '
-    throw "No pack definition at '$packFile'. Available: $available"
-}
-
-$cfg = @{}
-foreach ($line in Get-Content $packFile) {
-    if ($line -match '^\s*(#|$)') { continue }
-    $kv = $line -split '=', 2
-    if ($kv.Count -eq 2) { $cfg[$kv[0].Trim()] = $kv[1].Trim() }
-}
+$packFile = Get-PackFilePath -Pack $Pack -PacksDir $packsDir
+$cfg = Get-PackConfig -PackFile $packFile -Require @('PACK_PROVIDER', 'PACK_ID')
 
 Show-Versions $cfg['PACK_PROVIDER'] $cfg['PACK_ID'] $cfg['PACK_VERSION']
 Write-Host ''

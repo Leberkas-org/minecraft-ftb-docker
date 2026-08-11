@@ -1,4 +1,15 @@
+<div align="center">
+
+<!-- Neither logo has an alpha channel: logo.png is on black, logo_flat.png on
+     white, so each is served to the theme whose background it already matches. -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="logo.png">
+  <img src="logo_flat.png" alt="Minecraft modpack server images" width="180">
+</picture>
+
 # Minecraft modpack server images
+
+</div>
 
 One Dockerfile that builds a server image for **any** modpack on the
 [modpacks.ch](https://modpacks.ch) index — both CurseForge packs (All the Mods,
@@ -29,7 +40,19 @@ docker compose up -d                # world survives the image swap
 
 ## Adding a pack
 
-Add one file to `packs/`. Nothing else changes.
+Add one file to `packs/`. Nothing else changes — both workflows enumerate
+`packs/*.env`, so a new pack is picked up automatically.
+
+Easiest is to generate it from the pack's id:
+
+```powershell
+.\src\propose-pack.ps1 -Id 1298402            # provider auto-detected
+.\src\propose-pack.ps1 -Id 103 -Provider modpack -Name ftb-skies
+```
+
+It resolves the newest release, fills in the version, tag, Minecraft/modloader
+versions and an estimated heap, and writes `packs/<name>.env`. Or write it by
+hand:
 
 ```ini
 # packs/atm10.env
@@ -95,13 +118,15 @@ There is no search-by-name; read the id off the page.
 | Flag | Effect |
 | --- | --- |
 | `-Pack <name>` | Which `packs/<name>.env` to build (required) |
-| `-Latest` | Resolve the newest release from the API first; also tags `:latest` |
-| `-TagLatest` | Force the `:latest` tag on a pinned build |
+| `-Latest` | Resolve the newest release from the API first |
 | `-PackVersion <id>` | One-off version override |
 | `-JavaVersion <n>` | Override the derived JDK |
 | `-Image` / `-Tag` | Override the image name from the pack file |
 | `-Push` | Push after a successful build |
 | `-NoCache` | Force a full rebuild |
+
+Every build is tagged three ways — e.g. `:latest`, `:pack-version-8558519`
+(the modpacks.ch version id) and `:7.3` (the `TAG` from the pack file).
 
 ## Runtime configuration
 
@@ -156,20 +181,28 @@ the volume wins. Updating the pack is a rebuild, and the world survives it.
 
 ### All the Mods 10
 
+<img src="https://media.forgecdn.net/avatars/1182/438/638755918649288941.png" alt="All the Mods 10" width="110" align="right">
+
 ![Docker Pulls](https://img.shields.io/docker/pulls/dirnei/minecraft_atm_10?style=flat-square&logo=docker)
 ![Docker Image Version](https://img.shields.io/docker/v/dirnei/minecraft_atm_10?sort=date&style=flat-square&labelColor=re)
+
+Minecraft 1.21.1 · NeoForge · 10G recommended
 
 - [Modpack](https://www.curseforge.com/minecraft/modpacks/all-the-mods-10)
 - [Docker](https://hub.docker.com/repository/docker/dirnei/minecraft_atm_10/general)
 
-```bash
-docker pull dirnei/minecraft_atm_10:latest
-```
+<br clear="right">
 
 ### FTB Skies
+
+<img src="https://apps.modpacks.ch/modpacks/art/99/FTB%20Skies%20512x512.png" alt="FTB Skies" width="110" align="right">
 
 ![Docker Pulls](https://img.shields.io/docker/pulls/dirnei/ftb-skies?style=flat-square&logo=docker)
 ![Docker Image Version](https://img.shields.io/docker/v/dirnei/ftb-skies?sort=date&style=flat-square&labelColor=re)
 
+Minecraft 1.19.2 · Forge · 8G recommended
+
 - [Modpack](https://feed-the-beast.com/modpacks/103-ftb-skies)
 - [Docker](https://hub.docker.com/repository/docker/dirnei/ftb-skies/general)
+
+<br clear="right">

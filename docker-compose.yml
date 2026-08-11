@@ -9,7 +9,7 @@
 
 services:
   atm10:
-    image: dirnei/minecraft_atm_10:7.3
+    image: ghcr.io/leberkas-org/minecraft_atm_10:7.3
     build:
       context: ./src
       args:

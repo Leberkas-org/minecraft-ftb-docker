@@ -1,0 +1,172 @@
+name: build
+
+# One workflow for both jobs a change can need:
+#   pull_request -> build and boot the server, but never push
+#   push:master  -> build, boot, then publish to GHCR
+#
+# PR validation is opt-in: a pull request builds nothing until the `build` label
+# is added. A modpack build costs ~25 minutes of runner time, and these images
+# are not widely consumed, so nothing runs until someone decides it is worth it.
+# Once labelled, further pushes to that PR re-validate automatically.
+#
+# Merging still validates: the master run boots the server before it pushes, so
+# an unlabelled PR that turns out to be broken fails at publish rather than
+# shipping a server that will not start.
+on:
+  pull_request:
+    types: [ labeled, synchronize, reopened ]
+    paths: [ 'packs/**', 'src/**', '.github/workflows/build.yml' ]
+  push:
+    branches: [ master ]
+    paths: [ 'packs/**', 'src/**', '.github/workflows/build.yml' ]
+  workflow_dispatch:
+    inputs:
+      pack:
+        description: 'Pack to build, or "all"'
+        default: 'all'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    # Skip the whole workflow on an unlabelled pull request, before any runner
+    # does real work. Pushes to master and manual runs are never gated.
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'build')
+    runs-on: ubuntu-latest
+    outputs:
+      packs: ${{ steps.pick.outputs.packs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # A changed packs/x.env builds only x. A change under src/ touches the
+      # Dockerfile, entrypoint or installer, so every image has to be rebuilt.
+      - id: pick
+        shell: bash
+        run: |
+          set -euo pipefail
+          all=$(for f in packs/*.env; do basename "$f" .env; done)
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.pack }}" = "all" ]; then selected="$all"; else selected="${{ inputs.pack }}"; fi
+          else
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              base="${{ github.event.pull_request.base.sha }}"
+            else
+              base="${{ github.event.before }}"
+            fi
+            # First push to a branch reports an all-zero base
+            if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+              changed=$(git ls-files)
+            else
+              changed=$(git diff --name-only "$base" "${{ github.sha }}")
+            fi
+            echo "changed files:"; echo "$changed" | awk '{ print "  " $0 }'
+
+            if echo "$changed" | grep -q '^src/'; then
+              echo "src/ changed -> rebuilding every pack"
+              selected="$all"
+            else
+              selected=$(printf '%s\n' "$changed" | sed -n 's|^packs/\(.*\)\.env$|\1|p')
+            fi
+          fi
+
+          selected=$(echo "$selected" | tr ' ' '\n' | grep -v '^$' | sort -u || true)
+          echo "selected:"; echo "$selected" | awk '{ print "  " $0 }'
+
+          json=$(echo "$selected" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "packs=$json" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: discover
+    if: needs.discover.outputs.packs != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        pack: ${{ fromJSON(needs.discover.outputs.packs) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # A pack build needs ~6 GB and the runner only starts with ~14 GB free.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          swap-storage: false
+
+      # Deliberately no -Latest: CI must build exactly the version pinned in the
+      # commit, otherwise the thing reviewed is not the thing published.
+      - name: Build
+        id: build
+        shell: pwsh
+        run: ./src/build.ps1 -Pack ${{ matrix.pack }}
+
+      # The real gate. ATM10 7.3 built cleanly but would not start until
+      # colorwheel was excluded, and only booting the server catches that.
+      - name: Smoke test - server must reach "Done ("
+        shell: bash
+        env:
+          IMAGE: ${{ steps.build.outputs.primary }}
+        run: |
+          set -euo pipefail
+          docker run -d --name smoke \
+            -e EULA=true -e MEMORY=6G -e MOTD="ci smoke test" \
+            "$IMAGE"
+
+          deadline=$(( SECONDS + 1500 ))   # 25 minutes
+          ok=0
+          while [ $SECONDS -lt $deadline ]; do
+            if docker logs smoke 2>&1 | grep -q 'Done ('; then ok=1; break; fi
+            if [ "$(docker inspect -f '{{.State.Status}}' smoke)" != "running" ]; then
+              echo "::error::container exited before the server finished starting"
+              break
+            fi
+            sleep 10
+          done
+
+          if [ "$ok" != "1" ]; then
+            echo "::group::last 200 log lines"; docker logs smoke 2>&1 | tail -200; echo "::endgroup::"
+            echo "::group::crash reports"
+            docker cp smoke:/data/crash-reports /tmp/crash-reports 2>/dev/null \
+              && (cat /tmp/crash-reports/*.txt 2>/dev/null | head -100) || echo "none"
+            echo "::endgroup::"
+            docker rm -f smoke >/dev/null 2>&1 || true
+            exit 1
+          fi
+
+          echo "server started:"; docker logs smoke 2>&1 | grep 'Done (' | tail -1
+          docker stop -t 120 smoke >/dev/null
+          docker rm -f smoke >/dev/null 2>&1 || true
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ref in ${{ steps.build.outputs.tags }}; do
+            echo "pushing $ref"
+            docker push "$ref"
+          done

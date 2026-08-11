@@ -21,7 +21,7 @@
 #     --build-arg PACK_ID=925200 \
 #     --build-arg PACK_VERSION=8558519 \
 #     --build-arg JAVA_VERSION=21 \
-#     -t dirnei/minecraft_atm_10:7.3 ./src
+#     -t ghcr.io/leberkas-org/minecraft_atm_10:7.3 ./src
 
 ARG JAVA_VERSION=21
 FROM eclipse-temurin:${JAVA_VERSION}-jdk

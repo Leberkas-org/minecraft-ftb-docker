@@ -7,9 +7,17 @@
     builds src/Dockerfile with those values. Adding a new pack means adding one
     .env file - no Dockerfile changes.
 
+    Every build is tagged three ways: :latest, :pack-version-<id> and the
+    version name (when the pack file has a TAG).
+
 .EXAMPLE
     .\src\build.ps1 -Pack atm10
-    Builds dirnei/minecraft_atm_10:7.3 from the pinned version in packs/atm10.env.
+    Builds the pinned version from packs/atm10.env, tagged
+    :latest, :pack-version-8558519 and :7.3.
+
+.EXAMPLE
+    .\src\build.ps1 -Pack atm10 -Push
+    Builds and pushes every tag to the registry named by IMAGE in the pack file.
 
 .EXAMPLE
     .\src\build.ps1 -Pack atm10 -Latest
@@ -31,41 +39,26 @@ param (
     [string] $Image,
     [string] $Tag,
 
+    # Used only when the pack file has no IMAGE, so a new pack needs nothing but
+    # its ids. Without this the fallback was the bare pack name, which resolves
+    # to Docker Hub - a build would succeed and only fail at push.
+    [string] $Registry = 'ghcr.io/leberkas-org',
+
     # Normally derived from the pack's Minecraft version; override if needed.
     [string] $JavaVersion,
 
     # Resolve the newest 'release' version from the API before building.
     [switch] $Latest,
 
-    # Also tag :latest. Implied by -Latest; use this to force it for a pinned build.
-    [switch] $TagLatest,
-
     [switch] $Push,
     [switch] $NoCache
 )
 
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot\PackFile.ps1"
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$packFile = Join-Path $repoRoot "packs\$Pack.env"
-
-if (-not (Test-Path $packFile)) {
-    $available = (Get-ChildItem (Join-Path $repoRoot 'packs') -Filter '*.env' -ErrorAction SilentlyContinue |
-        ForEach-Object { $_.BaseName }) -join ', '
-    throw "No pack definition at '$packFile'. Available packs: $available"
-}
-
-# Parse KEY=VALUE, ignoring comments and blanks.
-$cfg = @{}
-foreach ($line in Get-Content $packFile) {
-    if ($line -match '^\s*(#|$)') { continue }
-    $kv = $line -split '=', 2
-    if ($kv.Count -eq 2) { $cfg[$kv[0].Trim()] = $kv[1].Trim() }
-}
-
-foreach ($required in @('PACK_PROVIDER', 'PACK_ID')) {
-    if (-not $cfg.ContainsKey($required)) { throw "$packFile is missing $required" }
-}
+$packFile = Get-PackFilePath -Pack $Pack
+$cfg = Get-PackConfig -PackFile $packFile -Require @('PACK_PROVIDER', 'PACK_ID')
 
 $provider = $cfg['PACK_PROVIDER']
 $packId = $cfg['PACK_ID']
@@ -73,20 +66,12 @@ $version = $cfg['PACK_VERSION']
 $versionName = $null
 
 if ($Latest) {
-    $uri = "https://api.modpacks.ch/public/$provider/$packId"
-    Write-Host "Resolving latest release from $uri"
-    $meta = Invoke-RestMethod -Uri $uri -TimeoutSec 60
-
-    $newest = $meta.versions |
-        Where-Object { $_.type -eq 'release' } |
-        Sort-Object id -Descending |
-        Select-Object -First 1
-
-    if (-not $newest) { throw "No 'release' version found for $($meta.name)" }
-
-    $version = "$($newest.id)"
-    $versionName = $newest.name
-    Write-Host "  $($meta.name) -> $versionName (file id $version)"
+    Write-Host "Resolving latest release for $provider/$packId"
+    $newest = Get-NewestPackVersion -Provider $provider -PackId $packId
+    $version = $newest.VersionId
+    # Version names are prose ("All the Mods 10-7.3") and cannot be used as a tag.
+    $versionName = ConvertTo-DockerTag $newest.VersionName
+    Write-Host "  $($newest.PackName) -> $($newest.VersionName) (file id $version, tag $versionName)"
 }
 
 if ($PackVersion) { $version = $PackVersion }
@@ -124,19 +109,29 @@ elseif ($cfg.ContainsKey('JAVA_VERSION')) { $java = $cfg['JAVA_VERSION'] }
 else { $java = Get-RequiredJava $mcVersion }
 
 if (-not $Image) {
-    if ($cfg.ContainsKey('IMAGE')) { $Image = $cfg['IMAGE'] } else { $Image = $Pack }
+    if ($cfg.ContainsKey('IMAGE')) { $Image = $cfg['IMAGE'] } else { $Image = "$Registry/$Pack" }
 }
 if (-not $Tag) {
     if ($versionName) { $Tag = $versionName }
     elseif ($cfg.ContainsKey('TAG')) { $Tag = $cfg['TAG'] }
-    else { $Tag = $version }
 }
 
-$fullImageName = "$Image`:$Tag"
+# Every build carries three tags: the floating one, the provider's version id and
+# the human version name (when the pack file or -Latest supplied one).
+#
+# The id is prefixed rather than published bare: both it and the version name are
+# numeric, so a bare tag list reads "7.3, 8558519, latest" and gives no clue which
+# number means what - or that 8558519 is a modpacks.ch version id at all.
+$tags = @("$Image`:latest", "$Image`:pack-version-$version")
+if ($Tag) { $tags += "$Image`:$Tag" }
+$tags = $tags | Select-Object -Unique
+
+$fullImageName = $tags[0]
 
 Write-Host ''
 Write-Host "Pack     : $Pack ($provider/$packId, version $version)"
-Write-Host "Image    : $fullImageName"
+Write-Host "Image    : $Image"
+Write-Host "Tags     : $(($tags | ForEach-Object { ($_ -split ':')[-1] }) -join ', ')"
 Write-Host "Minecraft: $(if ($mcVersion) { $mcVersion } else { 'unknown' })  ->  Java $java"
 Write-Host "Heap     : $($cfg['MEMORY'])  (runtime default; override with MEMORY at docker run)"
 Write-Host ''
@@ -153,14 +148,8 @@ $buildArgs = @(
     '--build-arg', "PACK_ID=$packId"
     '--build-arg', "PACK_VERSION=$version"
     '--build-arg', "JAVA_VERSION=$java"
-    '-t', $fullImageName
 )
-
-# Also tag :latest when we know this really is the newest release, so the
-# floating tag never moves backwards after a deliberate build of an old version.
-$latestTag = $null
-if ($TagLatest -or $Latest) { $latestTag = "$Image`:latest" }
-if ($latestTag) { $buildArgs += @('-t', $latestTag) }
+foreach ($t in $tags) { $buildArgs += @('-t', $t) }
 
 if ($cfg.ContainsKey('EXCLUDE_MODS')) {
     $buildArgs += @('--build-arg', "EXCLUDE_MODS=$($cfg['EXCLUDE_MODS'])")
@@ -185,19 +174,16 @@ if ($buildExit -ne 0) { throw "docker build failed with exit code $buildExit" }
 
 # Persist a successful -Latest resolution so the pack file stays the source of truth.
 if ($Latest) {
-    $updated = Get-Content $packFile | ForEach-Object {
-        if ($_ -match '^\s*PACK_VERSION\s*=') { "PACK_VERSION=$version" }
-        elseif ($_ -match '^\s*TAG\s*=') { "TAG=$Tag" }
-        else { $_ }
-    }
-    Set-Content -Path $packFile -Value $updated -Encoding utf8
+    $values = @{ PACK_VERSION = $version }
+    if ($Tag) { $values['TAG'] = $Tag }
+    Set-PackFileValue -PackFile $packFile -Values $values
     Write-Host "Updated $packFile -> PACK_VERSION=$version, TAG=$Tag"
 }
 
 if ($Push) {
     $ErrorActionPreference = 'Continue'
     try {
-        foreach ($ref in @($fullImageName, $latestTag | Where-Object { $_ })) {
+        foreach ($ref in $tags) {
             & docker push $ref
             if ($LASTEXITCODE -ne 0) { $pushExit = $LASTEXITCODE; break }
             $pushExit = 0
@@ -209,6 +195,13 @@ if ($Push) {
     if ($pushExit -ne 0) { throw "docker push failed with exit code $pushExit" }
 }
 
+# Let a CI job push exactly what was built without re-deriving the tag list.
+if ($env:GITHUB_OUTPUT) {
+    "image=$Image"                 | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+    "tags=$($tags -join ' ')"      | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+    "primary=$fullImageName"       | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+}
+
 Write-Host ''
-Write-Host "Built $fullImageName"
-if ($latestTag) { Write-Host "      $latestTag" }
+Write-Host 'Built:'
+foreach ($t in $tags) { Write-Host "  $t" }
