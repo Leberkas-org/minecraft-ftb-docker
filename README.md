@@ -15,6 +15,8 @@ Ready-to-run Docker images for Minecraft modpack servers. The whole modpack is
 baked into the image, so there is nothing to download or install on first start
 — bring a `docker-compose.yml` and a volume and you have a server.
 
+**[Browse the packs →](https://leberkas-org.github.io/minecraft-ftb-docker/)**
+
 ## Quick start
 
 Copy this to your server as `docker-compose.yml`:

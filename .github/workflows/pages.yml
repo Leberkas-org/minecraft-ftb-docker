@@ -1,0 +1,72 @@
+name: pages
+
+# Publishes the docs site. The page is generated from packs/*.env rather than
+# committed, so the pack list on the site cannot drift from what is actually
+# published - which is exactly how the README once advertised an image name that
+# did not exist.
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'packs/**'
+      - 'src/site-template.html'
+      - 'src/build-site.ps1'
+      - 'src/PackFile.ps1'
+      - 'logo.png'
+      - 'logo_flat.png'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel a half-finished deploy; queue behind it instead.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Generate the site
+        shell: pwsh
+        run: ./src/build-site.ps1 -OutputDir site
+
+      # Cheap guards against publishing something obviously broken: the pack
+      # list is fetched from an API at build time, so an empty or mojibake page
+      # is a real possibility.
+      - name: Sanity-check the output
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s site/index.html
+          grep -q 'ghcr.io/' site/index.html || { echo "::error::no image reference in the page"; exit 1; }
+          grep -q '{{' site/index.html && { echo "::error::unreplaced template token"; exit 1; }
+
+          # Positive check rather than hunting for mojibake byte patterns: if the
+          # template were read with the wrong encoding, the em dash would have
+          # become "a€" and this would not match. Asserting the good bytes is
+          # both simpler and harder to get subtly wrong.
+          grep -q $'\xe2\x80\x94' site/index.html || {
+            echo "::error::em dash missing - template decoded with the wrong encoding"; exit 1
+          }
+          echo "packs on the page: $(grep -c 'class=\"slot\" role=\"tab\"' site/index.html)"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
