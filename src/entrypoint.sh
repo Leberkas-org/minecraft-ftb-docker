@@ -158,14 +158,21 @@ done
 # ---------------------------------------------------------------------------
 # Overlay
 #
-# Any other file placed under ${DATA_DIR} is linked into ${MC_DIR} at the same
+# Any other file placed under ${DATA_DIR} is copied into ${MC_DIR} at the same
 # relative path, so single files can be overridden - server-icon.png, one config
 # out of the pack's hundred - without mounting all of ${MC_DIR} or knowing which
 # directory the server reads them from. The big state directories are pruned so
 # this never walks a multi-GB world.
+#
+# Copied, not symlinked, and never bind-mounted into ${MC_DIR} directly, because
+# mod configs are rewritten with an atomic replace: NightConfig writes a temp
+# file and renames it over the target. A rename cannot replace a mount point, so
+# a bind-mounted config is a fatal "Failed to atomically write (REPLACE_ATOMIC)"
+# at startup, and it silently swallows a symlink. A plain writable copy lets the
+# mod do as it likes, and the operator's version is re-applied on every start.
 # ---------------------------------------------------------------------------
 overlay_extras() {
-  local f rel link
+  local f rel target
   while IFS= read -r -d '' f; do
     rel="${f#"${DATA_DIR}/"}"
 
@@ -175,12 +182,19 @@ overlay_extras() {
         continue ;;
     esac
 
-    link="${MC_DIR}/${rel}"
-    [ -L "${link}" ] && [ "$(readlink "${link}")" = "${f}" ] && continue
+    target="${MC_DIR}/${rel}"
 
-    mkdir -p "$(dirname "${link}")"
-    rm -rf "${link}"
-    ln -s "${f}" "${link}"
+    # A path the operator bind-mounted into ${MC_DIR} themselves is theirs.
+    if mountpoint -q "${target}" 2>/dev/null; then
+      log "overlay ${rel}: skipped, already mounted at ${target}"
+      continue
+    fi
+
+    mkdir -p "$(dirname "${target}")"
+    rm -rf "${target}"
+    cp "${f}" "${target}"
+    chmod u+w "${target}" 2>/dev/null || true
+    own "${target}"
     log "overlay ${rel}"
   done < <(
     find "${DATA_DIR}" \
