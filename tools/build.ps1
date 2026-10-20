@@ -91,6 +91,7 @@ function Get-RequiredJava([string] $mcVersion) {
         '^1\.(17|18|19)(\.|$)'     { return '17' }
         '^1\.20\.[56]$'            { return '21' }
         '^1\.20(\.|$)'             { return '17' }
+        '^[2-9][0-9]\.'            { return '25' }   # year-based versions, 26.1+
         default                    { return '21' }
     }
 }

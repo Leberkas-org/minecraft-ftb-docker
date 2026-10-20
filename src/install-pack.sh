@@ -68,7 +68,8 @@ required_java_for() {
     1.1[789]*)                     echo 17 ;;
     1.20.5*|1.20.6*)               echo 21 ;;
     1.20*)                         echo 17 ;;
-    *)                             echo 21 ;;
+    [2-9][0-9].*)                  echo 25 ;;   # year-based versions, 26.1+
+    *)                           echo 21 ;;
   esac
 }
 

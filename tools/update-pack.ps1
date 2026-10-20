@@ -36,7 +36,10 @@ $packId = $cfg['PACK_ID']
 $current = $cfg['PACK_VERSION']
 $currentName = $cfg['TAG']
 
-$newest = Get-NewestPackVersion -Provider $provider -PackId $packId
+# Packs that have only ever shipped alpha/beta builds opt in with
+# INCLUDE_PRERELEASE=true; otherwise there is no release to track at all.
+$includeAll = $cfg['INCLUDE_PRERELEASE'] -eq 'true'
+$newest = Get-NewestPackVersion -Provider $provider -PackId $packId -IncludeAll:$includeAll
 
 # Version names are prose ("All the Mods 10-7.3"); a Docker tag cannot hold spaces.
 $newTag = ConvertTo-DockerTag $newest.VersionName
