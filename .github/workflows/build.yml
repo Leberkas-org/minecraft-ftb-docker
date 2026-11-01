@@ -3,6 +3,7 @@ name: build
 # One workflow for both jobs a change can need:
 #   pull_request -> build and boot the server, but never push
 #   push:master  -> build, boot, then publish to GHCR
+#   manual run   -> build and boot; publishes only with `publish` ticked
 #
 # PR validation is opt-in: a pull request builds nothing until the `build` label
 # is added. A modpack build costs ~25 minutes of runner time, and these images
@@ -30,6 +31,10 @@ on:
       pack:
         description: 'Pack to build, or "all"'
         default: 'all'
+      publish:
+        description: 'Push the image to GHCR'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -188,8 +193,9 @@ jobs:
           docker stop -t 120 smoke >/dev/null
           docker rm -f smoke >/dev/null 2>&1 || true
 
+      # Pushes to master always publish; a manual run only when asked to.
       - name: Log in to GHCR
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -197,7 +203,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)
         shell: bash
         run: |
           set -euo pipefail
