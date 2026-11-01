@@ -106,8 +106,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # A pack build needs ~6 GB and the runner only starts with ~14 GB free.
+      # A pack build needs ~6 GB. Current runners start with ~86 GB free, so the
+      # cleanup below (a few minutes) only runs if a runner ever comes up small.
+      - name: Check disk space
+        id: disk
+        shell: bash
+        run: |
+          avail=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+          echo "free on /: ${avail} GB"
+          echo "low=$([ "$avail" -lt 20 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
       - name: Free disk space
+        if: steps.disk.outputs.low == 'true'
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
           tool-cache: true
