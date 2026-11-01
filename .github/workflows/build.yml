@@ -21,6 +21,7 @@ on:
       - 'tools/build.ps1'           # how the image is built
       - 'tools/PackFile.ps1'
       - '.github/workflows/build.yml'
+      - '.github/scripts/mc-ping.py'  # the smoke test's pass criterion
   push:
     branches: [ master ]
     paths: *build_paths
@@ -125,29 +126,45 @@ jobs:
 
       # The real gate. ATM10 7.3 built cleanly but would not start until
       # colorwheel was excluded, and only booting the server catches that.
-      - name: Smoke test - server must reach "Done ("
+      #
+      # Passing means the server answers a Server List Ping, which it only does
+      # once the main tick loop runs. A "Done (" line in the log is accepted as
+      # a fallback. The log is written to a file and grepped there, never piped:
+      # with pipefail, `docker logs | grep -q` fails with SIGPIPE (141) as soon
+      # as grep stops reading a large log early, so a server that started fine
+      # looked like a hang until the deadline.
+      - name: Smoke test - server must answer a status ping
         shell: bash
         env:
           IMAGE: ${{ steps.build.outputs.primary }}
         run: |
           set -euo pipefail
           docker run -d --name smoke \
+            -p 127.0.0.1:25565:25565 \
             -e EULA=true -e MEMORY=6G -e MOTD="ci smoke test" \
             "$IMAGE"
 
+          log=$RUNNER_TEMP/smoke.log
           deadline=$(( SECONDS + 1500 ))   # 25 minutes
           ok=0
           while [ $SECONDS -lt $deadline ]; do
-            if docker logs smoke 2>&1 | grep -q 'Done ('; then ok=1; break; fi
+            sleep 10
+            if python3 .github/scripts/mc-ping.py 127.0.0.1 25565 2>/dev/null; then ok=1; break; fi
+            docker logs smoke > "$log" 2>&1 || true
+            if grep -q 'Done (' "$log"; then
+              echo "status ping did not answer, but the log reports the server started"
+              ok=1; break
+            fi
             if [ "$(docker inspect -f '{{.State.Status}}' smoke)" != "running" ]; then
               echo "::error::container exited before the server finished starting"
               break
             fi
-            sleep 10
           done
 
           if [ "$ok" != "1" ]; then
-            echo "::group::last 200 log lines"; docker logs smoke 2>&1 | tail -200; echo "::endgroup::"
+            [ $SECONDS -ge $deadline ] && echo "::error::server did not start within 25 minutes"
+            docker logs smoke > "$log" 2>&1 || true
+            echo "::group::last 200 log lines"; tail -200 "$log"; echo "::endgroup::"
             echo "::group::crash reports"
             docker cp smoke:/data/crash-reports /tmp/crash-reports 2>/dev/null \
               && (cat /tmp/crash-reports/*.txt 2>/dev/null | head -100) || echo "none"
@@ -156,7 +173,8 @@ jobs:
             exit 1
           fi
 
-          echo "server started:"; docker logs smoke 2>&1 | grep 'Done (' | tail -1
+          docker logs smoke > "$log" 2>&1 || true
+          grep 'Done (' "$log" | tail -1 || true
           docker stop -t 120 smoke >/dev/null
           docker rm -f smoke >/dev/null 2>&1 || true
 
